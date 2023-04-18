@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "stdio.h"
 
 
 void encodeA(char *str)
@@ -12,6 +13,7 @@ void encodeA(char *str)
             str[i] = toupper(str[i]);
         }
     }
+    printf("%s\n", str);
 }
 
 void decodeA(char *str)
