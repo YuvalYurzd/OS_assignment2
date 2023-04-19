@@ -14,82 +14,21 @@ void handle_signal(int sig)
     printf("\n"); // print a newline after the ^C signal
 }
 
-void run_command_with_pipes(char *command1, char *command2, char *command3) {
-    int pipe1[2]; // Pipe for command1 to command2
-    int pipe2[2]; // Pipe for command2 to command3
+void tokenizeString(const char *input, char *args[], int maxNumArgs) {
+    char *token = strtok((char *)input, " ");
+    int i = 0;
 
-    if (pipe(pipe1) == -1 || pipe(pipe2) == -1) {
-        perror("Failed to create pipes");
-        return;
+    while (token != NULL && i < maxNumArgs) {
+        args[i++] = strdup(token);
+        token = strtok(NULL, " ");
     }
 
-    pid_t pid1, pid2;
-
-    pid1 = fork();
-    if (pid1 == 0) {
-        dup2(pipe1[1], STDOUT_FILENO);
-
-        // Close unnecessary file descriptors
-        close(pipe1[0]);
-        close(pipe1[1]);
-        close(pipe2[0]);
-        close(pipe2[1]);
-
-        execlp(command1, command1, NULL);
-        perror("Failed to execute command1");
-        exit(1);
-    } else if (pid1 < 0) {
-        perror("Failed to fork for command1");
-        return;
+    // Fill remaining array elements with NULL
+    while (i < maxNumArgs) {
+        args[i++] = NULL;
     }
-    pid2 = fork();
-    if (pid2 == 0) {
-        dup2(pipe1[0], STDIN_FILENO);
-        dup2(pipe2[1], STDOUT_FILENO);
-
-        // Close unnecessary file descriptors
-        close(pipe1[0]);
-        close(pipe1[1]);
-        close(pipe2[0]);
-        close(pipe2[1]);
-
-        execlp(command2, command2, NULL);
-        perror("Failed to execute command2");
-        exit(1);
-    } else if (pid2 < 0) {
-        perror("Failed to fork for command2");
-        return;
-    }
-
-    pid_t pid3 = fork();
-    if (pid3 == 0) {
-        dup2(pipe2[0], STDIN_FILENO);
-
-        // Close unnecessary file descriptors
-        close(pipe1[0]);
-        close(pipe1[1]);
-        close(pipe2[0]);
-        close(pipe2[1]);
-
-        execlp(command3, command3, NULL);
-        perror("Failed to execute command3");
-        exit(1);
-    } else if (pid3 < 0) {
-        perror("Failed to fork for command3");
-        return;
-    }
-
-    // Close all file descriptors in the parent process
-    close(pipe1[0]);
-    close(pipe1[1]);
-    close(pipe2[0]);
-    close(pipe2[1]);
-
-    // Wait for all child processes to finish
-    waitpid(pid1, NULL, 0);
-    waitpid(pid2, NULL, 0);
-    waitpid(pid3, NULL, 0);
 }
+
 
 
 int main()
@@ -118,7 +57,7 @@ int main()
         int k = 0;
         for (int j = strlen(command); j >= 0; j--)
         {
-            if (command[j] == ' ')
+            if (command[j] == ' ' && command[j - 1] == '|')
                 break;
             k++;
         }
@@ -194,7 +133,6 @@ int main()
                 i++;
             }
         }
-
         args[i] = NULL;
         if (args[0] == NULL)
         { // empty command was entered
@@ -245,11 +183,86 @@ int main()
             }
             if (num_of_pipes == 2)
             {
-                run_command_with_pipes(token, token2, token3);
-                num_of_pipes = 0;
-                free(token);
-                free(token3);
-                continue;
+                int pipefd[4];
+
+                if(pipe(pipefd) == -1 || pipe(pipefd + 2) == -1)
+                {
+                    printf("error creating pipe");
+                    exit(EXIT_FAILURE);
+                }
+
+                pid_t pid2 = fork();
+
+                if(pid < 0)
+                {
+                        printf("fork failed");
+                        exit(EXIT_FAILURE);
+                }
+
+                // first command
+                else if(pid2 == 0)
+                {
+                    dup2(*(pipefd + 1), STDOUT_FILENO);
+                    close(*pipefd);
+                    close(*(pipefd + 1));
+                    close(*(pipefd + 2));
+                    close(*(pipefd + 3));
+
+
+                    char *args[MAXARGS];
+                    tokenizeString(token, args, MAXARGS);
+                    if(execvp(args[0], args) == - 1)
+                    {
+                        perror("execvp failed");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    exit(EXIT_SUCCESS);
+                }
+                pid2 = fork();
+                if(pid2 < 0)
+                {
+                    printf("fork failed");
+                    exit(EXIT_FAILURE);
+                }
+
+                //second command
+                else if (pid2 == 0)
+                {
+                    dup2(*pipefd, STDIN_FILENO);
+                    dup2(*(pipefd + 3), STDOUT_FILENO);
+                    close(*pipefd);
+                    close(*(pipefd + 1));
+                    close(*(pipefd + 2));
+                    close(*(pipefd + 3));
+
+                    char *args2[MAXARGS];
+                    tokenizeString(token2, args2, MAXARGS);
+                    if(execvp(args2[0],args2) == - 1)
+                    {
+                        perror("execvp failed");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    exit(EXIT_SUCCESS);
+                }
+
+                //third command
+                else {
+                    dup2(*(pipefd + 2), STDIN_FILENO);
+                    close(*pipefd);
+                    close(*(pipefd + 1));
+                    close(*(pipefd + 2));
+                    close(*(pipefd + 3));
+
+                    char *args3[MAXARGS];
+                    tokenizeString(token3, args3, MAXARGS);
+                    if(execvp(args3[0],args3) == - 1)
+                    {
+                        perror("execvp failed");
+                        exit(EXIT_FAILURE);
+                    }
+                }
             }
 
             if (redirect_mode == 1)
