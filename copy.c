@@ -4,111 +4,82 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3)
+    // Check if correct number of arguments provided
+    if (argc < 3 || argc > 4)
     {
-        fprintf(stderr, "usage: ./copy <file1> <file2> [-v] [-f]\n");
+        printf("Usage: ./copy <source_file> <destination_file> [-v] [-f]\n");
         return 1;
     }
 
+    // Get source file and destination file paths
+    char *source_file = argv[1];
+    char *destination_file = argv[2];
+
+    // Check if -v flag provided
     int verbose = 0;
+    if (argc == 4 && strcmp(argv[3], "-v") == 0)
+    {
+        verbose = 1;
+    }
+
+    // Check if -f flag provided
     int force = 0;
-
-    if (argc > 3)
+    if (argc == 4 && strcmp(argv[3], "-f") == 0)
     {
-        for (int i = 3; i < argc; i++)
-        {
-            if (strcmp(argv[i], "-v") == 0)
-            { // checking if -v was entered by user
-                verbose = 1;
-            }
-            else if (strcmp(argv[i], "-f") == 0)
-            { // checking if -f was entered by user
-                force = 1;
-            }
-            else
-            {
-                fprintf(stderr, "Invalid option: %s\n", argv[i]);
-                return 1;
-            }
-        }
+        force = 1;
     }
 
-    char *source_file_name = argv[1];
-    char *dest_file_name = argv[2];
-
-    FILE *psource_file = fopen(source_file_name, "r");
-    if (psource_file == NULL)
+    // Check if destination file already exists
+    FILE *dest_file = fopen(destination_file, "r");
+    if (dest_file != NULL)
     {
-        fprintf(stderr, "Could not open source file: %s\n", source_file_name);
-        return 1;
+        if (!force)
+        {
+            printf("target file exists\n");
+            fclose(dest_file);
+            return 1;
+        }
+        fclose(dest_file);
     }
 
-    // creating destination file or checking if -f was entered by user and overwriting the file if needed
-    FILE *pdest_file = fopen(dest_file_name, "r");
-    if (pdest_file != NULL)
+    // Open source file for reading
+    FILE *src_file = fopen(source_file, "r");
+    if (src_file == NULL)
     {
-        if (fclose(pdest_file) != 0)
-        {
-            fprintf(stderr, "Error\n");
-            fclose(psource_file);
-            return 1;
-
-            if (force)
-            {
-                pdest_file = fopen(dest_file_name, "w");
-            }
-            else
-            {
-                fprintf(stderr, "Target file exists: %s\n", dest_file_name);
-                fclose(psource_file);
-                return 1;
-            }
-        }
-        else
-        {
-            pdest_file = fopen(dest_file_name, "w");
-        }
-
-        if (pdest_file == NULL)
-        {
-            fprintf(stderr, "Could not open destination file: %s\n", dest_file_name);
-            fclose(psource_file);
-            return 1;
-        }
-
-        int ch = 0;
-
-        // writing into destination file
-        while ((ch = fgetc(psource_file)) != EOF)
-        {
-            if (fputc(ch, pdest_file) == EOF)
-            {
-                fprintf(stderr, "Error writing to destination file: %s\n", dest_file_name);
-                fclose(psource_file);
-                fclose(pdest_file);
-                return 1;
-            }
-        }
-
-        if (fclose(psource_file) != 0)
-        {
-            fprintf(stderr, "Error closing source file: %s\n", source_file_name);
-            fclose(pdest_file);
-            return 1;
-        }
-
-        if (fclose(pdest_file) != 0)
-        {
-            fprintf(stderr, "Error closing destination file: %s\n", dest_file_name);
-            return 1;
-        }
-
         if (verbose)
         {
-            printf("Success\n");
+            printf("general failure\n");
         }
-
-        return 0;
+        return 1;
     }
+
+    // Open destination file for writing
+    dest_file = fopen(destination_file, "w");
+    if (dest_file == NULL)
+    {
+        if (verbose)
+        {
+            printf("general failure\n");
+        }
+        fclose(src_file);
+        return 1;
+    }
+
+    // Copy content from source file to destination file
+    int ch;
+    while ((ch = fgetc(src_file)) != EOF)
+    {
+        fputc(ch, dest_file);
+    }
+
+    fclose(src_file);
+    fclose(dest_file);
+
+    // Print success message if -v flag provided
+    if (verbose)
+    {
+        printf("success\n");
+    }
+
     return 0;
 }
